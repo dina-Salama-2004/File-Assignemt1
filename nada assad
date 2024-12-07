@@ -1,0 +1,306 @@
+void add(Doctor doctor)
+{
+    fstream file("Doctor.txt", ios::out | ios::binary | ios ::in);
+
+    short header;
+    file.seekg(0, ios::beg);
+    file.read((char *)&header, sizeof(header));
+    short idSize = ::strlen(doctor.Doctor_ID);
+    short nameSize = ::strlen(doctor.Doctor_Name);
+    short addressSize = ::strlen(doctor.Address);
+    short recordSize = idSize + nameSize + addressSize;
+    ////update index file ///////////////////////////////
+    /// update index file ///////////////////////////////
+    insert_secondary_DoctorName(doctor.Doctor_Name, doctor.Doctor_ID);
+
+    // check if avail list is empty or not
+    if (header == -1)
+    {
+        file.seekp(0, ios::end);
+        doctor.writeDoctor(file, doctor);
+        short offset = file.tellp();
+        //
+        Insert_Doctor_ID_Sorted(doctor.Doctor_ID, offset);
+        file.close();
+    }
+        // avail list is not empty so i have to check if there is any size fits new record
+    else
+    {
+        // nextOffset stores offset of next available record in the file
+        // deletedSize stores size of deleted record
+        short nextOffset, deletedSize;
+        file.seekg(header + 1, ios::beg);
+        file.read((char *)&nextOffset, sizeof(nextOffset));
+        file.seekg(header - 2, ios::beg);
+        file.read((char *)&deletedSize, sizeof(deletedSize));
+
+        short diff = deletedSize - recordSize;
+        // add new record at the end because it does not fit
+        if (diff < 0)
+        {
+            file.seekp(0, ios::end);
+            doctor.writeDoctor(file, doctor);
+            Insert_Doctor_ID_Sorted(doctor.Doctor_ID, file.tellp());
+            ////update index file ///////////////////////////////
+            ////update index file ///////////////////////////////
+            file.close();
+        }
+        else
+        {
+            // When the available space is almost enough but has a small remainder
+            // in this case diff added to record size
+            if (diff - 2 < 5)
+            {
+                file.seekp(0, ios::beg);
+                file.write((char *)&nextOffset, sizeof(nextOffset));
+                file.seekp(header - 2, ios::beg);
+                ////update index file ///////////////////////////////
+                Insert_Doctor_ID_Sorted(doctor.Doctor_ID, header);
+
+                recordSize += diff;
+                doctor.writeDoctor(file, doctor);
+                file.close();
+            }
+                // When the available space is significantly larger than required
+                //
+            else
+            {
+                file.seekp(0, ios::beg);
+                file.write((char *)&nextOffset, sizeof(nextOffset));
+                file.seekp(header - 2, ios::beg);
+                ////update index file ///////////////////////////////
+                Insert_Doctor_ID_Sorted(doctor.Doctor_ID, header);
+
+                doctor.writeDoctor(file, doctor);
+
+                file.seekg(-(::strlen(doctor.Doctor_ID) + ::strlen(doctor.Doctor_Name) + ::strlen(doctor.Address) + 10), ios::beg);
+                file.seekg(recordSize, ios::cur);
+
+                short fakeID = 1;
+                diff -= 2;
+                file.write((char *)&diff, sizeof(diff));
+
+                file.write("#", 1);
+                file.write("|", 1);
+                file.write("1", 1);
+                file.write("|", 1);
+                file.close();
+                char id[15] = "1";
+                Delete(id);
+            }
+        }
+    }
+}
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void Delete(char id[]) {
+    short M = -1; // Marker for deleted records
+    std::fstream file("Doctor.txt", std::ios::out | std::ios::binary | std::ios::in | std::ios::ate);
+
+    if (!file.is_open()) {
+        std::cerr << "Error opening file." << std::endl;
+        return;
+    }
+
+    short offset = getOffsetFromPrimaryIndex("doctor_ID_primary_Index.txt", id);
+    std::cout << offset << "\n";
+
+    if (offset == -1) {
+        std::cout << "Not Valid ID\n";
+        file.close();
+        return;
+    }
+
+    file.seekg(offset - sizeof(short), std::ios::beg);
+    short size;
+    file.read(reinterpret_cast<char*>(&size), sizeof(size));
+
+    file.seekg(0, std::ios::beg);
+    short header;
+    file.read(reinterpret_cast<char*>(&header), sizeof(header));
+    std::cout << "header " << header << "\n";
+
+    if (header == -1) {
+        // First record to be deleted
+        file.seekg(0, std::ios::beg);
+        file.write(reinterpret_cast<char*>(&offset), sizeof(offset));
+        file.seekg(offset, std::ios::beg);
+        file.write("*", 1);
+        file.write(reinterpret_cast<char*>(&M), sizeof(M));
+    } else {
+        // Handle the case where the available list is not empty
+        short prev = header;
+        short next;
+        bool inserted = false;
+
+        while (true) {
+            file.seekg(prev + sizeof(short), std::ios::beg);
+            file.read(reinterpret_cast<char*>(&next), sizeof(next));
+
+            if (next == -1 || size < next) {
+                // Insert the deleted record here
+                file.seekg(offset, std::ios::beg);
+                file.write("*", 1);
+                file.write(reinterpret_cast<char*>(&next), sizeof(next));
+                file.seekg(prev + sizeof(short), std::ios::beg);
+                file.write(reinterpret_cast<char*>(&offset), sizeof(offset));
+                inserted = true;
+                break;
+            }
+            prev = next;
+        }
+
+        if (!inserted) {
+            // If we reached the end of the list
+            file.seekg(offset, std::ios::beg);
+            file.write("*", 1);
+            file.write(reinterpret_cast<char*>(&M), sizeof(M));
+            file.seekg(prev + sizeof(short), std::ios::beg);
+            file.write(reinterpret_cast<char*>(&offset), sizeof(offset));
+        }
+    }
+
+    file.close();
+}
+void updateName(){
+    fstream file("SecondaryIndexForDoctorName.txt", ios::in | ios::out | ios::binary);
+    short beg = 0;
+    short last;
+
+}
+
+void deletePrimary(int id){
+    fstream file("doctor_ID_primary_Index.txt", ios::binary|ios::in|ios::out);
+    short beg = 0;
+    short last = count_id-1;
+    short mid;
+    bool found = false;
+    int temp;
+    while (beg <= last && !found){
+        mid = (beg+last)/2;
+        file.seekg(mid*6,ios::beg);
+        file.read((char *)&temp, sizeof(temp));
+        if (temp == id)
+            found= true;
+        else if (temp > id)
+            last = mid-1;
+        else
+            beg = mid+1;
+    }
+    if (found){
+        file.seekg((mid+1)*6, ios::beg);
+        while (file.good()){
+            int tmp;
+            short off;
+            file.read((char *)&tmp, sizeof(tmp));
+            file.read((char *)&off, sizeof(off));
+            file.seekg(-12, ios::cur);
+            file.write((char *)&tmp, sizeof(tmp));
+            file.write((char *)&off, sizeof(off));
+            file.seekg(6, ios::cur);
+        }
+        file.close();
+        fstream file("doctor_ID_primary_Index.txt", ios::binary|ios::in|ios::out);
+        count_id--;
+    }
+    file.close();
+}
+
+int totalEntries = getRecordCount("SecondaryIndexForDoctorName.txt", 32); // 30 + 2 (pointer size)
+void deleteSecondary(char name[30]){
+    fstream file("SecondaryIndexForDoctorName.txt", ios::binary|ios::in|ios::out);
+    short beg = 0;
+    short last = count_id-1;
+    short mid;
+    bool found = false;
+    char temp[30];
+    while (beg <= last && !found){
+        mid = (beg+last)/2;
+        file.seekg(mid*34,ios::beg);
+        file.read((char *)&temp, sizeof(temp));
+        if (::strcmp(temp, name) == 0)
+            found= true;
+        else if (::strcmp(temp, name) == 1)
+            last = mid-1;
+        else
+            beg = mid+1;
+    }
+    file.close();
+    if (!found)
+        return;
+    file.open("SecondaryIndexForDoctorName.txt", ios::binary|ios::in|ios::out);
+
+    file.seekg(((totalEntries-1)*34), ios::beg);
+    file.seekg((mid+34), ios::beg);
+    int i = mid/34;
+    while (i < totalEntries-1){
+        char tmp[30];
+        short off;
+        file.read(tmp, 5);
+        file.read((char *)&off, sizeof(off));
+        file.seekg(i*34, ios::beg);
+        file.write(tmp, sizeof(tmp));
+        file.write((char *)&off, sizeof(tmp));
+        i++;
+    }
+    totalEntries--;
+    file.close();
+
+
+}
+void Update(Doctor doctor)
+{
+    // extract doctor id as integer
+    int t = 0;
+    for (int i = 0; doctor.Doctor_ID[i] != '\0'; ++i)
+    {
+        t *= 10;
+        t += (doctor.Doctor_ID[i] - '0');
+    }
+    deletePrimary(t);
+
+    fstream file("Doctor.txt", ios::out | ios::in | ios::binary);
+    short offset = getOffsetFromPrimaryIndex("doctor_ID_primary_Index.txt", doctor.Doctor_ID);
+    if (offset == -1)
+    {
+        cout << "Doctor does not exist\n";
+        file.close();
+        return;
+    }
+
+    short recordSize;
+    file.seekg(offset, ios::beg);
+    file.read((char *)&recordSize, sizeof(recordSize));
+
+    short idSize = ::strlen(doctor.Doctor_ID);
+    short nameSize = ::strlen(doctor.Doctor_Name);
+    short addressSize = ::strlen(doctor.Address);
+    short newRecordSize = idSize + nameSize + addressSize;
+
+    short difference = recordSize - newRecordSize;
+
+    insert_secondary_DoctorName(doctor.Doctor_Name, doctor.Doctor_ID);
+    // if the new record size grater than the original record
+    if (difference < 0)
+    {
+        Delete(doctor.Doctor_ID);
+        file.seekp(0, ios::end);
+        Insert_Doctor_ID_Sorted(doctor.Doctor_ID, file.tellp());
+    }
+    else if (difference - 2 <= 5)
+    {
+        file.seekp(offset - 2, ios::beg);
+        short off = file.tellp();
+        Insert_Doctor_ID_Sorted(doctor.Doctor_ID, off+1);
+    }
+    else
+    {
+        file.seekp(offset-2, ios::beg);
+        short off = file.tellp();
+        Insert_Doctor_ID_Sorted(doctor.Doctor_ID, off+1);
+    }
+    file.write((char *)&newRecordSize, sizeof(newRecordSize));
+    doctor.writeDoctor(file, doctor);
+    file.close();
+}
